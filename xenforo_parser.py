@@ -1,89 +1,118 @@
-import time
-from bs4 import BeautifulSoup
 import requests
+import argparse
 import codecs
+import time
 import re
 import os
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from html2bbcode.parser import HTML2BBCode
+from bs4 import BeautifulSoup
 
-def get_html(url): #передаем URL
+
+
+API_SETTINGS = []
+
+def get_html(url, sleep_time=0):
     chrome_options = Options()
     chrome_options.add_argument("headless")
-    
-    browser = webdriver.Chrome(chrome_options=chrome_options) 
+    browser = webdriver.Chrome(options=chrome_options) 
     browser.get(url)             
-
-    time.sleep(0)               #если есть защита с задержкой на вход 
+    # if there is protection with a delay before entering the page
+    time.sleep(sleep_time)              
     
     html = browser.page_source   
-
     browser.quit()               
-    return html                  
-def main():
-    pages = ['https://blast.hk/forums/53']
-    print('pages:', '; '.join(pages))
-    for base_page in pages:
-        print('base_page:', base_page)
-        base = re.search('.+\.[a-zA-Z]+/', base_page)[0]
-        base_folder = re.search('://(.+)/', base)[0][3:][::-1][1:][::-1]
-        base_html = get_html(base_page)
+    return html
 
-        print()
+def autoposting_settings():
+    api_url = input('Enter a link to your API (<XF url>/api/): ')
+    api_key = input('Enter your user API key: ')
+    node_id = input('Enter your node id: ')
 
+    r = requests.post(api_url, headers={'XF-Api-Key': api_key})
+
+    if r.json()['errors'][0]['code'] == 'api_key_not_found':
+        print("Invalid API key")
+    else:
+        global API_SETTINGS
+        API_SETTINGS = [api_url, api_key, int(node_id)]
+
+def api_create_thread(title, message, tags):
+    print(API_SETTINGS)
+    header = {'XF-Api-Key': API_SETTINGS[1]}
+    param = {"node_id": API_SETTINGS[2], "title": title, "message": message.replace("\"", "'"), "tags": tags}
+    requests.post(API_SETTINGS[0] + "threads/", params=param, headers=header)
+
+def parse_content(forum_url, sleep_time, autoposting):
+    bbcode_parser = HTML2BBCode()
+    base_html = get_html(forum_url, sleep_time)
+    base_url = re.search('.+\.[a-zA-Z]+/', forum_url)[0]
+    base_folder = re.search('://(.+)/', base_url)[0][3:-1]
+
+    if autoposting == False:
         try:
             os.mkdir(base_folder)
             print(f'Folder with name {base_folder} successfully created')
         except FileExistsError:
             print(f'Folder with name "{base_folder}" already exists')
-        print()
 
-        bs = BeautifulSoup(base_html, 'html5lib')
-
-        themes_ol = bs.find(class_ = 'structItemContainer')
-        themes_bs = BeautifulSoup(str(themes_ol), 'html5lib')
-        themes = themes_bs.find_all('a', {'data-xf-init': 'preview-tooltip'})
-
-        themes_links = [(base + theme.attrs['href']) for theme in themes]
-        ind = 1
-        for theme_link in themes_links:
-            print(f'[{ind}/{len(themes_links)}] theme_link:', theme_link)
-
-            theme_html = get_html(theme_link)
-            theme_bs = BeautifulSoup(theme_html, 'html5lib')
-
-            theme_name = theme_bs.find('h1', {'class': 'p-title-value'}).text
-            print(theme_name)
-            theme_tags = '; '.join([tag.text for tag in BeautifulSoup(str(theme_bs.find('span', {'class': 'js-tagList'})), 'html5lib').find_all('a', {'class': 'tagItem'})])
-            theme_creator = theme_bs.find('h4', {'class': 'message-name'}).text.split()[0]
-            print(theme_tags, theme_creator)
-            theme_text = theme_bs.find('div', {'class': 'bbWrapper'})
-            
-            theme_attachments_tmp = BeautifulSoup(str(theme_bs.find('ul', {'class': 'attachmentList'})), 'html5lib').find_all('li', {'class': 'attachment'})
-            theme_attachments_lst = []
-            for theme_attachment in theme_attachments_tmp:
-                attachment_link = base + '/' + BeautifulSoup(str(theme_attachment), 'html5lib').find('div', {'class': 'attachment-name'}).find('a').attrs['href']
-                attachment_text = BeautifulSoup(str(theme_attachment), 'html5lib').find('a').text
-                theme_attachments_lst.append(f'{attachment_text}: {attachment_link}')
-            theme_attachments = '\n'.join(theme_attachments_lst)
-
-            theme_file = theme_link[::-1][1:][::-1]
-            while '/' in theme_file:
-                theme_file = theme_file[1:]
+    bs = BeautifulSoup(base_html, 'html5lib')
+    forum_structItemContainer = bs.find(class_ = 'structItemContainer')
+    threads = forum_structItemContainer.find_all('a', {'data-xf-init': 'preview-tooltip'})
+    threads_links = []
+    
+    for thread in threads:       
+        threads_links.append(base_url + thread.get('href'))
+    for thread_link in threads_links:
+        thread_tags = []
+        thread_html = get_html(thread_link)
+        thread = BeautifulSoup(thread_html, 'html5lib')
+        thread_title = thread.find('h1', {'class': 'p-title-value'}).text
+        # print(thread_title)
+        thread_tagList = thread.find('span', {'class': 'js-tagList'})
+        if thread_tagList is not None:
+            for tag_text in thread_tagList.find_all('a'):
+                thread_tags.append(tag_text.text)
+        # print(thread_tags)
+        thread_creator = thread.find('h4', {'class': 'message-name'}).text
+        # print(thread_creator)
+        thread_content = thread.find('div', {'class': 'bbWrapper'})
+        thread_content = str(bbcode_parser.feed(str(thread_content)[23:-6]))
+        print(thread_content)
+        if API_SETTINGS is not None and autoposting == True:
+            api_create_thread(thread_title, thread_content, thread_tags)
+        else:
             try:
-                file = codecs.open(base_folder + '\\' + theme_file + '.txt', 'w+', 'utf-8')
-                content = f'theme name:\n{theme_name}\n\n' \
-                        f'theme tags:\n{theme_tags}\n\n' \
-                        f'theme creator:\n{theme_creator}\n\n' \
-                        f'theme attachments:\n{theme_attachments}' \
-                        f'theme text:\n{theme_text}'
+                thread_file = thread_link.replace(base_url,"").replace("/","").replace("threads", "")
+                file = codecs.open(base_folder + '/' + thread_file + '.txt', 'w+', 'utf-8')
+                content = f'Thread title:\n{thread_title}\n\n' \
+                        f'Thread tags:\n{thread_tags}\n\n' \
+                        f'Thread creator:\n{thread_creator}\n\n' \
+                        f'Thread text:\n{thread_title}'
                 file.write(content)
                 file.close()
-                print(f'theme with number {theme_file} successfully saved\n')
+                print(f'Threade {thread_file} successfully saved\n')
             except Exception as exc:
-                print(f'an error occurred while saving the theme: {exc}')
-            ind += 1
-        
- 
+                print(f'An error occurred while saving the theme: {exc}')
+
+def main():
+    parser = argparse.ArgumentParser(description='Process some integers.')
+    parser.add_argument('--url', '-u',
+                        help='link to the forum page')
+    # parser.add_argument('--login', '-l', 
+    #                     help='username to log in to your account if necessary')
+    # parser.add_argument('--password', '-p', 
+    #                     help='password to log in to your account if necessary')
+    parser.add_argument('--sleep', '-s', 
+                        help='waiting time before logging in to the forum', type=int, default=0)
+    parser.add_argument('--autoposting', '-a', 
+                        help='automatically create topics on your forum using the REST API', action='store_true', default=False)
+    args = parser.parse_args()
+    if args.autoposting:
+        autoposting_settings()
+
+    parse_content(args.url, args.sleep, args.autoposting)
+
 if __name__ == '__main__':
     main()
