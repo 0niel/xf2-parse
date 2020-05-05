@@ -18,7 +18,7 @@ The parser automatically downloads all threads on the same page in the forum. Wh
 
 At the moment, there is no support for attachments!
 
-- [x] Automatically create threads using the API.
+- [x] Automatically create threads using the REST API.
 - [x] Parsing threads from the page.
 - [ ] Selecting the parser mode: selenium/requests.
 - [ ] Ability to log in to your account before parsing.
