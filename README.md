@@ -1,4 +1,4 @@
-# Xenforo-2-threads-parser
+# xf2-parse
 Threads parser from xenforo 2
 
 ```
