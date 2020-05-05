@@ -69,7 +69,7 @@ def parse_content(forum_url, sleep_time, autoposting):
         thread_html = get_html(thread_link)
         thread = BeautifulSoup(thread_html, 'html5lib')
         thread_title = thread.find('h1', {'class': 'p-title-value'}).text
-        print('Parsing: thread_title')
+        print('Parsing:' + thread_title)
         thread_tagList = thread.find('span', {'class': 'js-tagList'})
         if thread_tagList is not None:
             for tag_text in thread_tagList.find_all('a'):
