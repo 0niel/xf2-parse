@@ -69,17 +69,15 @@ def parse_content(forum_url, sleep_time, autoposting):
         thread_html = get_html(thread_link)
         thread = BeautifulSoup(thread_html, 'html5lib')
         thread_title = thread.find('h1', {'class': 'p-title-value'}).text
-        # print(thread_title)
+        print('Parsing: thread_title')
         thread_tagList = thread.find('span', {'class': 'js-tagList'})
         if thread_tagList is not None:
             for tag_text in thread_tagList.find_all('a'):
                 thread_tags.append(tag_text.text)
-        # print(thread_tags)
         thread_creator = thread.find('h4', {'class': 'message-name'}).text
-        # print(thread_creator)
+
         thread_content = thread.find('div', {'class': 'bbWrapper'})
         thread_content = str(bbcode_parser.feed(str(thread_content)[23:-6]))
-        print(thread_content)
         if API_SETTINGS is not None and autoposting == True:
             api_create_thread(thread_title, thread_content, thread_tags)
         else:
@@ -100,10 +98,6 @@ def main():
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--url', '-u',
                         help='link to the forum page')
-    # parser.add_argument('--login', '-l', 
-    #                     help='username to log in to your account if necessary')
-    # parser.add_argument('--password', '-p', 
-    #                     help='password to log in to your account if necessary')
     parser.add_argument('--sleep', '-s', 
                         help='waiting time before logging in to the forum', type=int, default=0)
     parser.add_argument('--autoposting', '-a', 
