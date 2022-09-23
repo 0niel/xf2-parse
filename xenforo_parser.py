@@ -42,7 +42,7 @@ def api_create_thread(title, message, tags):
     print(API_SETTINGS)
     header = {'XF-Api-Key': API_SETTINGS[1]}
     param = {"node_id": API_SETTINGS[2], "title": title, "message": message.replace("\"", "'"), "tags": tags}
-    requests.post(API_SETTINGS[0] + "threads/", params=param, headers=header)
+    requests.post(f"{API_SETTINGS[0]}threads/", params=param, headers=header)
 
 def parse_content(forum_url, sleep_time, autoposting):
     bbcode_parser = HTML2BBCode()
@@ -60,20 +60,17 @@ def parse_content(forum_url, sleep_time, autoposting):
     bs = BeautifulSoup(base_html, 'html5lib')
     forum_structItemContainer = bs.find(class_ = 'structItemContainer')
     threads = forum_structItemContainer.find_all('a', {'data-xf-init': 'preview-tooltip'})
-    threads_links = []
-    
-    for thread in threads:       
-        threads_links.append(base_url + thread.get('href'))
+    threads_links = [base_url + thread.get('href') for thread in threads]
+
     for thread_link in threads_links:
         thread_tags = []
         thread_html = get_html(thread_link)
         thread = BeautifulSoup(thread_html, 'html5lib')
         thread_title = thread.find('h1', {'class': 'p-title-value'}).text
-        print('Parsing:' + thread_title)
+        print(f'Parsing:{thread_title}')
         thread_tagList = thread.find('span', {'class': 'js-tagList'})
         if thread_tagList is not None:
-            for tag_text in thread_tagList.find_all('a'):
-                thread_tags.append(tag_text.text)
+            thread_tags.extend(tag_text.text for tag_text in thread_tagList.find_all('a'))
         thread_creator = thread.find('h4', {'class': 'message-name'}).text
 
         thread_content = thread.find('div', {'class': 'bbWrapper'})
@@ -83,7 +80,7 @@ def parse_content(forum_url, sleep_time, autoposting):
         else:
             try:
                 thread_file = thread_link.replace(base_url,"").replace("/","").replace("threads", "")
-                file = codecs.open(base_folder + '/' + thread_file + '.txt', 'w+', 'utf-8')
+                file = codecs.open(f'{base_folder}/{thread_file}.txt', 'w+', 'utf-8')
                 content = f'Thread title:\n{thread_title}\n\n' \
                         f'Thread tags:\n{thread_tags}\n\n' \
                         f'Thread creator:\n{thread_creator}\n\n' \
